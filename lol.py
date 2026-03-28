@@ -1,39 +1,25 @@
+def send_worker(user_id, target_user_id, course_id, course_info):
 
-def send(update: Update, context: CallbackContext):
-    user_id = update.effective_chat.id
-
-    if user_id != CHAT_ID:
-        update.message.reply_text("❌ Unauthorized")
+    if not login():
+        bot.send_message(chat_id=user_id, text="❌ Login failed!")
         return
 
-    args = context.args
+    try:
+        url = LESSONS_URL.format(course_id=course_id)
+        r = requests.get(url, headers=headers)
+        data = r.json()
 
-    # ❌ गलत usage block
-    if len(args) != 2:
-        update.message.reply_text("⚠️ Format use kar:\n/send user_id course_id")
-        return
+        today_classes = data.get("todayclasses", [])
 
-    target_user_id = args[0]
-    course_id = args[1]
+        for cls in today_classes:
 
-    # validate user_id
-    if not target_user_id.lstrip("-").isdigit():
-        update.message.reply_text("❌ Invalid user_id")
-        return
+            if not running_tasks.get(user_id):
+                bot.send_message(chat_id=user_id, text="🛑 Stopped!")
+                return
 
-    target_user_id = int(target_user_id)
+            telegram_send(target_user_id, format_class_message(cls, course_info["name"]))
 
-    # validate course
-    course_info = COURSES.get(course_id)
-    if not course_info:
-        update.message.reply_text("❌ Invalid course_id")
-        return
+    except Exception as e:
+        print(e)
 
-    running_tasks[user_id] = True
-
-    update.message.reply_text(f"⏳ Sending course {course_id} to {target_user_id}...")
-
-    threading.Thread(
-        target=send_worker,
-        args=(user_id, target_user_id, course_id, course_info)
-    ).start()
+    bot.send_message(chat_id=user_id, text="✅ Done!")
